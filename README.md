@@ -1,8 +1,8 @@
-# NConvert-Batch
-Status: Working - Recently added cases of operation for windows 7/8/8.1/10/11, for more robust termination upon "Exit Program".
+# NConvert-Gradio-Batch
+Status: Working - QTWeb, no longer uses external browser for GUI.
 
 ### Description:
-Its a Python Gradio interface for converting ANY image format to ANY imgage format, even rare ones like .pspimage, all made possible through NConvert binary command line tool. The program provides a user-friendly menu to set the source folder, input file format, and desired output format. The scripts ensures efficient and seamless conversion and management of image files, making it a practical tool for users needing to process multiple common format such as `.jpg`, `.bmp`, `.png`, etc, and also less common formats such as`.pspimage`, and vice versa, and another thing, it does this recursively through subfolders, so you can just aim it at windows pictures folder, and everything will be where it was, just in the new format too.
+Its a Python QTWeb Gradio interface for converting ANY image format to ANY imgage format, even rare ones like .pspimage, all made possible through NConvert binary command line tool. The program provides a user-friendly menu to set the source folder, input file format, and desired output format. The scripts ensures efficient and seamless conversion and management of image files, making it a practical tool for users needing to process multiple common format such as `.jpg`, `.bmp`, `.png`, etc, and also less common formats such as`.pspimage`, and vice versa, and another thing, it does this recursively through subfolders, so you can just aim it at windows pictures folder, and everything will be where it was, just in the new format too.
 
 ### Features:
 - **Multiple Formats**: The Gradio interface limited to 10, but they can be edited in the `.py` script. 
@@ -21,7 +21,7 @@ Its a Python Gradio interface for converting ANY image format to ANY imgage form
 - The NConvert-Batch Gradio WebUi...
 ![Alternative text](https://github.com/wiseman-timelord/NConvertBatch/blob/main/media/gradio_interface.jpg)
 
-- The installation processes (when dropped in a folder already containing nconvert)...
+- The installation processes (including download of NConvert)...
 <details> 
 
     ============================================================
@@ -67,12 +67,16 @@ Its a Python Gradio interface for converting ANY image format to ANY imgage form
 - Internet - Installer requires internet for install of Python libraries etc.
 
 ### Instructions:
-1. Run `NConvert-Batch.Bat` by right click `Run as Administrator`, as we are doing, complex recursive file operations under the interface and downloading/unpacking NConvert in the installer.
-2. Install Requirements from menu through option `2`, it will run `.\installer.py`, which will install everything you require via direct links/pip. 
-3. After requirements are installed, then run `NConvert-Batch` from `1.` on the batch menu, and if the gradio interface does not pop-up in the default browser, then right click the server address and then click open.. 
-4. Configure the settings in the browser interface, if your file format preference is not in the list, then edit relevant lists in python script by replace appropriate extension text.
-7. When all setting are correct, then 1st ensure you noticed the `Delete Original Files?` tickbox, and if you did, then click `Start Conversion`, and it will convert the files, as  you have specified, over-writing as it goes.
-8. Check the image folders, I saved you hours of work, but I did say I was a TimeLord ha.
+Here are my current instructions...
+```
+1. Downlaod latest release, and unpack to a suitable location.
+2. Run `NConvert-Gradio-Batch.Bat` by right click `Run as Administrator`, as we are doing, complex recursive file operations under the interface and downloading/unpacking NConvert in the installer. 
+- It is optional to manually download/unpack NConvert to ".\data\NConvert\*", and the installer will detect it, but otherwise the installer would handle the download/install if there is no NConvert unpacked there. This may help if there are for some reason network issues.
+3. Install Requirements from menu through option `2` on the batch menu, it will run `.\installer.py`, which will install everything you require via web/pip. 
+4. After requirements are installed, then run `NConvert-Batch` from `1.` on the batch menu, and if the gradio interface does not pop-up in its own built-in browser window.
+5. Configure the settings in the browser interface, if your file format preference is not in the list, then edit relevant lists in python script by replace appropriate extension text.
+6. When all setting are correct, then 1st ensure you noticed the `Delete Original Files?` tickbox, and if you did, then click `Start Conversion`, and it will convert the files, as  you have specified, over-writing as it goes.
+7. Check the image folders, I saved you potentially hours of work, but I did say I was a TimeLord ha.
 
 ### NOTATION:
 - If you want to display, for example "AVIF" format, in the Windows Explorer thumbnails, then you should install [Icaros](https://github.com/Xanashi/Icaros/releases), then in the configuration add, in the case of the example ".avif", to the file extension list, and activate it.
