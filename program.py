@@ -1,13 +1,18 @@
-# Script: program.py - NConvert Batch Converter
+# Script: program.py - NConvert-Gradio-Batch
 # Compatible with Python 3.9–3.11 and Windows 8.1–11
-# Gradio v5.49.1 + NConvert v7.110
+# Gradio v5.49.1 + NConvert v7.110 + PyQt6 WebEngine
+
+# ─── QtWebEngine GPU Workaround ────────────────────────────────────────────────
+# Must be set BEFORE any Qt imports to avoid Chromium GPU context errors
+# on systems without full GPU/OpenGL support.
+import os
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+os.environ["QT_OPENGL"] = "software"
 
 print("Starting Imports...")
-import os
 import sys
 import time
 import gradio as gr
-import webbrowser
 from threading import Timer, Thread
 import subprocess
 import asyncio
@@ -58,7 +63,7 @@ print(f"Detected OS: {WINDOWS_VERSION or 'Non-Windows'}")
 workspace_path = os.path.abspath(os.path.join(".", "temp"))
 DATA_DIR = Path(__file__).parent / "data"
 SETTINGS_FILE = DATA_DIR / "persistent.json"
-nconvert_path = str(Path(__file__).parent / "nconvert.exe")
+nconvert_path = str(DATA_DIR / "NConvert" / "nconvert.exe")
 allowed_formats = ["JPEG", "PNG", "BMP", "GIF", "TIFF", "AVIF", "WEBP", "SVG", "PSD", "PSPIMAGE"]
 
 # Session defaults
@@ -388,8 +393,8 @@ def create_interface():
     }
     """
 
-    with gr.Blocks(title="NConvert Batch Converter", css=css) as demo:
-        gr.Markdown("# NConvert Batch Image Converter")
+    with gr.Blocks(title="NConvert-Gradio-Batch", css=css) as demo:
+        gr.Markdown("# NConvert-Gradio-Batch - Image Converter")
 
         with gr.Row():
             folder_txt = gr.Textbox(
@@ -454,7 +459,7 @@ def create_interface():
             exit_thread = Thread(target=graceful_shutdown, daemon=True)
             exit_thread.start()
             # Return immediately to satisfy Gradio's request
-            return "Shutting down... Please close browser tab manually if needed."
+            return "Shutting down... The window will close automatically."
 
         # ─── Bindings ───────────────────────────────────────────────────────────
 
@@ -485,6 +490,82 @@ def create_interface():
         )
 
     return demo
+
+# ─── Built-in Qt Browser ───────────────────────────────────────────────────────
+
+def launch_qt_browser(url, title="NConvert-Gradio-Batch"):
+    """
+    Launch an embedded PyQt6 WebEngine browser window pointing at the Gradio UI.
+    This replaces the default webbrowser.open() call so the interface stays
+    inside its own dedicated window rather than opening a system browser tab.
+    """
+    try:
+        from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
+        from PyQt6.QtWebEngineWidgets import QWebEngineView
+        from PyQt6.QtWebEngineCore import QWebEngineSettings
+        from PyQt6.QtCore import QUrl, QTimer
+    except ImportError:
+        print("Warning: PyQt6-WebEngine not available. Falling back to system browser.")
+        import webbrowser
+        webbrowser.open(url)
+        return
+
+    # Prevent conflicts: create QApplication only if one doesn't exist
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+
+    class GradioBrowser(QMainWindow):
+        def __init__(self, url, title):
+            super().__init__()
+            self.setWindowTitle(title)
+            self.resize(1280, 900)
+            self.setMinimumSize(800, 600)
+
+            # Central widget & layout
+            central = QWidget()
+            self.setCentralWidget(central)
+            layout = QVBoxLayout(central)
+            layout.setContentsMargins(0, 0, 0, 0)
+
+            # WebEngine view
+            self.browser = QWebEngineView()
+            layout.addWidget(self.browser)
+
+            # Configure web settings
+            settings = self.browser.settings()
+            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, True)
+
+            # Load the Gradio URL
+            self.browser.setUrl(QUrl(url))
+
+            # Update window title from page title
+            self.browser.titleChanged.connect(self._on_title_changed)
+
+        def _on_title_changed(self, page_title):
+            if page_title:
+                self.setWindowTitle(f"{page_title} — NConvert-Gradio-Batch")
+
+        def closeEvent(self, event):
+            """When the Qt window is closed, trigger the graceful shutdown."""
+            print("Browser window closed — initiating shutdown...")
+            event.accept()
+            # Schedule shutdown slightly after the window closes
+            QTimer.singleShot(200, self._do_shutdown)
+
+        def _do_shutdown(self):
+            QApplication.instance().quit()
+            # Trigger the Gradio + process shutdown in a thread
+            Thread(target=graceful_shutdown, daemon=True).start()
+
+    window = GradioBrowser(url, title)
+    window.show()
+
+    # Run the Qt event loop (blocks until window is closed)
+    app.exec()
 
 # ─── Launcher ───────────────────────────────────────────────────────────────────
 
@@ -518,9 +599,9 @@ def launch():
 
     close_old_gradio(port)
 
-    print(f"Launching interface on http://localhost:{port}")
+    gradio_url = f"http://localhost:{port}"
+    print(f"Launching interface on {gradio_url}")
     print(f"OS Version: {WINDOWS_VERSION or 'Non-Windows'}")
-    Timer(2.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()
 
     demo = create_interface()
     global_demo = demo
@@ -537,14 +618,25 @@ def launch():
         except:
             pass
 
-    demo.launch(
-        server_name="127.0.0.1",
-        server_port=port,
-        share=False,
-        inbrowser=False,
-        quiet=False,
-        prevent_thread_lock=False  # Allow proper shutdown
-    )
+    # Launch Gradio in a background thread (non-blocking)
+    def run_gradio():
+        demo.launch(
+            server_name="127.0.0.1",
+            server_port=port,
+            share=False,
+            inbrowser=False,
+            quiet=False,
+            prevent_thread_lock=True  # Non-blocking so Qt can take over the main thread
+        )
+
+    gradio_thread = Thread(target=run_gradio, daemon=True)
+    gradio_thread.start()
+
+    # Give Gradio a moment to start up before loading the browser
+    time.sleep(2.5)
+
+    # Launch the built-in Qt browser on the main thread (Qt requires main thread)
+    launch_qt_browser(gradio_url, title="NConvert-Gradio-Batch")
 
 if __name__ == "__main__":
     if os.name == 'nt':

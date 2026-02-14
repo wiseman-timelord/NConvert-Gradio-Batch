@@ -1,7 +1,7 @@
 # script: installer.py
 """
-NConvert-Batch Installer
-Handles all installation requirements for NConvert-Batch application
+NConvert-Gradio-Batch Installer
+Handles all installation requirements for NConvert-Gradio-Batch application
 """
 import os
 import sys
@@ -64,6 +64,11 @@ INSTALL_PACKAGES = [
     "pydub==0.25.1",
     "Pygments==2.19.2",
     "pyparsing==3.2.5",
+    "PyQt6==6.9.0",
+    "PyQt6-Qt6==6.9.0",
+    "PyQt6_sip==13.10.0",
+    "PyQt6-WebEngine==6.9.0",
+    "PyQt6-WebEngine-Qt6==6.9.0",
     "python-dateutil==2.9.0.post0",
     "python-multipart==0.0.20",
     "pytz==2025.2",
@@ -88,13 +93,14 @@ INSTALL_PACKAGES = [
 ]
 
 # Critical packages for verification (subset of installed packages)
-CRITICAL_PACKAGES = ['gradio', 'pandas', 'numpy', 'psutil']
+CRITICAL_PACKAGES = ['gradio', 'pandas', 'numpy', 'psutil', 'PyQt6-WebEngine']
 
 PACKAGE_IMPORT_MAP = {  # Map package names to import names for verification
     'gradio': 'gradio',
     'pandas': 'pandas',
     'numpy': 'numpy',
-    'psutil': 'psutil'
+    'psutil': 'psutil',
+    'PyQt6-WebEngine': 'PyQt6.QtWebEngineWidgets'
 }
 
 MIN_PYTHON_VERSION = (3, 8)  # Minimum required Python version
@@ -116,8 +122,9 @@ DEFAULT_SESSION = {
 class NConvertInstaller:
     def __init__(self):
         self.script_dir = Path(__file__).parent.absolute()
-        self.nconvert_exe = self.script_dir / "nconvert.exe"
         self.data_dir = self.script_dir / "data"
+        self.nconvert_dir = self.data_dir / "NConvert"
+        self.nconvert_exe = self.nconvert_dir / "nconvert.exe"
         self.session_file = self.data_dir / "persistent.json"
         self.workspace_dir = self.script_dir / "temp"
 
@@ -128,7 +135,7 @@ class NConvertInstaller:
         char = char or HEADER_CHAR
         length = length or SEPARATOR_LENGTH
         separator = char * length
-        print(f"\n{separator}")
+        print(f"{separator}")
         print(f"    {title}")
         print(f"{separator}\n")
 
@@ -154,30 +161,21 @@ class NConvertInstaller:
         return True
 
     def detect_architecture(self):
+        """Auto-detect system architecture and return 'x64' or 'x32'."""
         machine = platform.machine().lower()
         architecture = platform.architecture()[0]
+
         if machine in ['amd64', 'x86_64'] or architecture == '64bit':
             detected = 'x64'
         elif machine in ['i386', 'i686', 'x86'] or architecture == '32bit':
             detected = 'x32'
         else:
             detected = 'x64'  # default assumption
-        print(f"Detected architecture: {detected} (machine: {machine}, arch: {architecture})")
-        return detected
 
-    def prompt_architecture(self):
-        detected = self.detect_architecture()
-        while True:
-            print(f"\nArchitecture options:")
-            print(f"  1) x64 (64-bit) {'[Detected]' if detected == 'x64' else ''}")
-            print(f"  2) x32 (32-bit) {'[Detected]' if detected == 'x32' else ''}")
-            choice = input(f"Select architecture (1/2, Enter for detected [{detected}]): ").strip()
-            if choice == "" or choice == "1":
-                return 'x64'
-            elif choice == "2":
-                return 'x32'
-            else:
-                print("Invalid selection. Please enter 1, 2, or press Enter.")
+        arch_label = "64-bit" if detected == 'x64' else "32-bit"
+        print(f"Detected architecture: {arch_label} ({detected}) "
+              f"[machine={machine}, platform.architecture={architecture}]")
+        return detected
 
     def create_workspace(self):
         try:
@@ -270,14 +268,18 @@ class NConvertInstaller:
             return False
 
     def move_nconvert_files(self, source_dir):
-        nconvert_dir = source_dir / "NConvert"
-        if not nconvert_dir.exists():
+        """Move NConvert files into .\\data\\NConvert\\"""
+        nconvert_extracted = source_dir / "NConvert"
+        if not nconvert_extracted.exists():
             self.print_status("NConvert directory not found in extracted files", success=False)
             return False
         try:
+            # Ensure target directory exists
+            self.nconvert_dir.mkdir(parents=True, exist_ok=True)
+
             moved_count = 0
-            for item in nconvert_dir.iterdir():
-                destination = self.script_dir / item.name
+            for item in nconvert_extracted.iterdir():
+                destination = self.nconvert_dir / item.name
                 if destination.exists():
                     if destination.is_file():
                         destination.unlink()
@@ -286,9 +288,9 @@ class NConvertInstaller:
                 shutil.move(str(item), str(destination))
                 moved_count += 1
                 print(f"Moved: {item.name}")
-            if nconvert_dir.exists():
-                nconvert_dir.rmdir()
-            self.print_status(f"Moved {moved_count} items successfully")
+            if nconvert_extracted.exists():
+                nconvert_extracted.rmdir()
+            self.print_status(f"Moved {moved_count} items to .\\data\\NConvert\\")
             return True
         except Exception as e:
             self.print_status(f"Error moving files: {e}", success=False)
@@ -296,13 +298,14 @@ class NConvertInstaller:
 
     def install_nconvert(self):
         if self.nconvert_exe.exists():
-            self.print_status("nconvert.exe already exists")
+            self.print_status(f"nconvert.exe already exists at .\\data\\NConvert\\")
             return True
         
         print("NConvert not found, attempting download...")
-        architecture = self.prompt_architecture()
+        architecture = self.detect_architecture()
         url = NCONVERT_URLS[architecture]
-        zip_name = f"NConvert-win{'64' if architecture == 'x64' else ''}.zip"
+        arch_label = "64-bit" if architecture == 'x64' else "32-bit"
+        print(f"Downloading NConvert {arch_label} from: {url}")
         
         # Better naming for temp file (easier to recognize when debugging)
         with tempfile.NamedTemporaryFile(suffix='.zip', prefix='nconvert-', delete=False) as tmp:
@@ -350,6 +353,7 @@ class NConvertInstaller:
                 return False
 
         print("\nInstalling pinned application packages...")
+        print("(This includes PyQt6-WebEngine for the built-in browser)")
         # Create temporary requirements file for pinned dependencies
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as req_file:
             req_file.write("\n".join(INSTALL_PACKAGES))
@@ -389,7 +393,7 @@ class NConvertInstaller:
         all_good = True
 
         if self.nconvert_exe.exists():
-            self.print_status("nconvert.exe found")
+            self.print_status(f"nconvert.exe found at .\\data\\NConvert\\")
         else:
             self.print_status("nconvert.exe missing", success=False)
             all_good = False
@@ -413,9 +417,57 @@ class NConvertInstaller:
         
         return all_good
 
-    def run_installation(self):
+    # ─── Clean Install ──────────────────────────────────────────────────────────
+
+    def purge_data_directory(self):
+        """Remove the entire .\\data\\ directory for a clean install."""
+        if self.data_dir.exists():
+            print(f"Purging data directory: {self.data_dir}")
+            try:
+                shutil.rmtree(self.data_dir)
+                self.print_status("Data directory removed")
+            except Exception as e:
+                self.print_status(f"Failed to remove data directory: {e}", success=False)
+                return False
+        else:
+            print("Data directory does not exist, nothing to purge.")
+
+        # Also remove workspace temp directory
+        if self.workspace_dir.exists():
+            print(f"Purging workspace directory: {self.workspace_dir}")
+            try:
+                shutil.rmtree(self.workspace_dir)
+                self.print_status("Workspace directory removed")
+            except Exception as e:
+                self.print_status(f"Failed to remove workspace directory: {e}", success=False)
+                return False
+
+        return True
+
+    def uninstall_python_packages(self):
+        """Uninstall all application packages for a clean slate."""
+        print("\nUninstalling existing application packages...")
+        # Extract package names without version pins
+        package_names = [pkg.split("==")[0] for pkg in INSTALL_PACKAGES]
+
+        # Uninstall in one batch
+        result = subprocess.run(
+            [sys.executable, '-m', 'pip', 'uninstall', '-y'] + package_names,
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            self.print_status("Application packages uninstalled")
+        else:
+            # Some packages may not have been installed; that's OK
+            self.print_status("Package uninstall completed (some may not have been present)")
+        return True
+
+    # ─── Installation Flows ─────────────────────────────────────────────────────
+
+    def run_regular_install(self):
+        """Regular Install / Refresh: install or update everything in-place."""
         self.clear_screen()
-        self.print_header("NConvert-Batch Installer")
+        self.print_header("NConvert-Gradio-Batch — Regular Install / Refresh")
 
         if not self.check_python_version():
             return False
@@ -437,17 +489,108 @@ class NConvertInstaller:
         print("\n" + "=" * SEPARATOR_LENGTH)
         if success:
             print("✓ Installation completed successfully!")
-            print("\nYou can now run NConvert-Batch.bat")
+            print("\nYou can now run NConvert-Gradio-Batch.bat")
         else:
             print("✗ Installation encountered issues")
             print("Please review the messages above")
 
         return success
 
+    def run_clean_install(self):
+        """Clean Install: purge everything in .\\data\\ and .\\temp\\, then reinstall."""
+        self.clear_screen()
+        self.print_header("NConvert-Gradio-Batch — Clean Install")
+
+        if not self.check_python_version():
+            return False
+
+        print()
+        
+        # Purge phase
+        self.print_header("Phase 1: Purge", char="-")
+        if not self.purge_data_directory():
+            return False
+        if not self.uninstall_python_packages():
+            return False
+
+        # Install phase
+        self.print_header("Phase 2: Fresh Install", char="-")
+        if not self.create_workspace():
+            return False
+
+        if not self.install_nconvert():
+            return False
+
+        if not self.install_python_packages():
+            return False
+
+        if not self.create_default_session_file():
+            return False
+
+        success = self.verify_installation()
+
+        print("\n" + "=" * SEPARATOR_LENGTH)
+        if success:
+            print("✓ Clean installation completed successfully!")
+            print("\nYou can now run NConvert-Gradio-Batch.bat")
+        else:
+            print("✗ Installation encountered issues")
+            print("Please review the messages above")
+
+        return success
+
+    # ─── Installer Menu ─────────────────────────────────────────────────────────
+
+    def show_menu(self):
+        """Display the installer menu and return the user's choice."""
+        self.clear_screen()
+        self.print_header("NConvert-Gradio-Batch Installer")
+        print()
+        print()
+        print()
+        print()
+        print()
+        print()
+        print()
+        print()
+        print("     1. Regular Install / Refresh")
+        print("        Install or update all components in-place.")
+        print()
+        print("     2. Clean Install")
+        print("        Purge .\\data\\ and .\\temp\\, uninstall packages, then reinstall.")
+        print()
+        print()
+        print()
+        print()
+        print()
+        print()
+        print()
+        print()
+        self.print_separator()
+
+        while True:
+            choice = input("Selection; Menu Options = 1-2, Exit Installer = X: ").strip()
+            if choice in ("1", "2") or choice.upper() == "X":
+                return choice.upper()
+            else:
+                print("Invalid option. Please try again.")
+
+
 def main():
     installer = NConvertInstaller()
     try:
-        success = installer.run_installation()
+        choice = installer.show_menu()
+
+        if choice == "1":
+            success = installer.run_regular_install()
+        elif choice == "2":
+            success = installer.run_clean_install()
+        elif choice == "X":
+            print("\nExiting installer.")
+            sys.exit(0)
+        else:
+            success = False
+
         print("\nPress Enter to exit...")
         input()
         sys.exit(0 if success else 1)
