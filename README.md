@@ -21,49 +21,93 @@ Its a Python QTWeb Gradio interface for converting ANY image format to ANY imgag
 - The NConvert-Batch Gradio WebUi...
 ![Alternative text](https://github.com/wiseman-timelord/NConvertBatch/blob/main/media/gradio_interface.jpg)
 
-- The installation processes (including download of NConvert)...
+- The installation processes, showing a Clean Install...
 <details> 
 
-    ============================================================
-        NConvert-Batch Installer
-    ============================================================
+    ===============================================================================
+        NConvert-Gradio-Batch — Clean Install
+    ===============================================================================
     
-    V Python 3.11 detected
-    V Workspace directory ready: C:\Program_Files\NConvert-Batch\NConvert-Batch-1.2\
-    temp
-    V nconvert.exe already exists
+    ✓ Python 3.12 detected
+    
+    -------------------------------------------------------------------------------
+        Phase 1: Purge
+    -------------------------------------------------------------------------------
+    
+    Purging data directory: C:\Media_Files\NConvert-Gradio-Batch\NConvert-Gradio-Batch\data
+    ✓ Data directory removed
+    Purging workspace directory: C:\Media_Files\NConvert-Gradio-Batch\NConvert-Gradio-Batch\temp
+    ✓ Workspace directory removed
+    
+    Uninstalling existing application packages...
+    ✓ Application packages uninstalled
+    -------------------------------------------------------------------------------
+        Phase 2: Fresh Install
+    -------------------------------------------------------------------------------
+    
+    ✓ Workspace directory ready: C:\Media_Files\NConvert-Gradio-Batch\NConvert-Gradio-Batch\temp
+    NConvert not found, attempting download...
+    Detected architecture: 64-bit (x64) [machine=amd64, platform.architecture=64bit]
+    Downloading NConvert 64-bit from: https://download.xnview.com/NConvert-win64.zip
+    Found partial download (0.0 MB) → will attempt to resume
+    
+    Download attempt 1/4 - Starting download...
+    Progress:  74%  (   7.7/10.4 MB)
+    
+    Incomplete download detected (8087904 / 10885373 bytes)
+    
+    Download failed: Download incomplete
+    Retrying in 4 seconds... (attempt 2/4)
+    
+    Download attempt 2/4 - Resuming download...
+    Progress: 100%  (  10.4/10.4 MB)
+    Download completed successfully ✓
+    Extracting: nconvert-q12wkfhp.zip
+    ✓ Extraction completed
+    Moved: Formats.txt
+    Moved: license.txt
+    Moved: nconvert.exe
+    Moved: plugins
+    Moved: Plugins.txt
+    Moved: ReadMe.txt
+    Moved: Usage.txt
+    Moved: vcomp120.dll
+    Moved: WhatsNew.txt
+    ✓ Moved 9 items to .\data\NConvert\
+    ✓ NConvert installation completed
     
     Upgrading build tools (pip, setuptools) to latest...
     → Upgrading pip to latest version...
-    V pip upgraded successfully
+    ✓ pip upgraded successfully
     → Upgrading setuptools to latest version...
-    V setuptools upgraded successfully
+    ✓ setuptools upgraded successfully
     
     Installing pinned application packages...
-    V All application packages installed successfully
-    V Default persistent config created: data/persistent.json
+    (This includes PyQt6-WebEngine for the built-in browser)
+    ✓ All application packages installed successfully
+    ✓ Default persistent config created: data/persistent.json
     
     Verifying critical components...
-    V nconvert.exe found
-    V gradio available
-    V pandas available
-    V numpy available
-    V psutil available
-    V All critical components verified successfully
+    ✓ nconvert.exe found at .\data\NConvert\
+    ✓ gradio available
+    ✓ pandas available
+    ✓ numpy available
+    ✓ psutil available
+    ✓ PyQt6-WebEngine available
+    ✓ All critical components verified successfully
     
-    ============================================================
-    V Installation completed successfully!
+    ===============================================================================
+    ✓ Clean installation completed successfully!
     
-    You can now run NConvert-Batch.bat
-    
-    Press Enter to exit...
-    
+    You can now run NConvert-Gradio-Batch.bat
+   
 </details>
 
 ## Requirements:
-- Windows 7-11 - The batch auto detects if the width of the terminal is 80/120 and displays text appropriately.
+- Windows 10-11 - The Batch uses a 80x30 text display, the new QTWeb code needs to be assessed for case operation/install, so for now its 10-11, however v1.2 versions have cases of operation/install for 7-11 compatibility. Likely I will drop Windows 7-8.1 going forwards.
 - [NConvert](https://www.xnview.com/en/nconvert) - ~500 image formats supported (installed by installer).
 - Python 3.9+ - Tested on 3.11/3.12, but ensure python.exe is on system PATH.
+- Powershell ? - Needs to be assessed, but its for the text buffer. 
 - Internet - Installer requires internet for install of Python libraries etc.
 
 ### Instructions:
@@ -77,6 +121,7 @@ Here are my current instructions...
 5. Configure the settings in the browser interface, if your file format preference is not in the list, then edit relevant lists in python script by replace appropriate extension text.
 6. When all setting are correct, then 1st ensure you noticed the `Delete Original Files?` tickbox, and if you did, then click `Start Conversion`, and it will convert the files, as  you have specified, over-writing as it goes.
 7. Check the image folders, I saved you potentially hours of work, but I did say I was a TimeLord ha.
+```
 
 ### NOTATION:
 - If you want to display, for example "AVIF" format, in the Windows Explorer thumbnails, then you should install [Icaros](https://github.com/Xanashi/Icaros/releases), then in the configuration add, in the case of the example ".avif", to the file extension list, and activate it.
