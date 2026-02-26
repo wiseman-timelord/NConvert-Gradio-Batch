@@ -1,14 +1,14 @@
 # Script: program.py - NConvert-Gradio-Batch
 # Compatible with Python 3.9–3.11 and Windows 8.1–11
 # Gradio v5.49.1 + NConvert v7.110 + PyQt6 WebEngine
-
 # ─── QtWebEngine GPU Workaround ────────────────────────────────────────────────
 # Must be set BEFORE any Qt imports to avoid Chromium GPU context errors
 # on systems without full GPU/OpenGL support.
+
+# Imports
 import os
 os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
 os.environ["QT_OPENGL"] = "software"
-
 print("Starting Imports...")
 import sys
 import time
@@ -26,16 +26,12 @@ import platform
 import ctypes
 import signal
 import atexit
-
 print("..Imports Completed.")
-
 print("Initializing Program...")
 # ─── Global References ──────────────────────────────────────────────────────────
 global_demo = None
 _shutdown_requested = False
-
 # ─── OS Detection & Compatibility ───────────────────────────────────────────────
-
 def get_windows_version():
     """Detect Windows version for compatibility handling."""
     if os.name != 'nt':
@@ -57,9 +53,7 @@ def get_windows_version():
 
 WINDOWS_VERSION = get_windows_version()
 print(f"Detected OS: {WINDOWS_VERSION or 'Non-Windows'}")
-
 # ─── Paths & Globals ────────────────────────────────────────────────────────────
-
 workspace_path = os.path.abspath(os.path.join(".", "temp"))
 DATA_DIR = Path(__file__).parent / "data"
 SETTINGS_FILE = DATA_DIR / "persistent.json"
@@ -80,14 +74,14 @@ if SETTINGS_FILE.exists():
     try:
         with SETTINGS_FILE.open("r", encoding="utf-8") as f:
             data = json.load(f)
-            candidate = Path(data.get("last_folder", ""))
+            candidate = Path(data.get("last_folder", "."))
             if candidate.exists() and candidate.is_dir():
                 _session["last_folder"] = str(candidate.resolve())
             _session["last_from"] = data.get("last_from", _session["last_from"])
             _session["last_to"] = data.get("last_to", _session["last_to"])
             _session["last_delete"] = data.get("last_delete", _session["last_delete"])
             _session["beep_on_complete"] = data.get("beep_on_complete", _session["beep_on_complete"])
-        print("Loaded: .\\data\\persistent.json")
+            print("Loaded: .\data\persistent.json")
     except Exception:
         pass
 
@@ -100,11 +94,8 @@ beep_on_complete = _session["beep_on_complete"]
 # Processing tracking
 files_process_done = 0
 files_process_total = 0
-
 print("..Initialization Complete.\n")
-
 # ─── Helpers ────────────────────────────────────────────────────────────────────
-
 def save_last_session():
     try:
         DATA_DIR.mkdir(exist_ok=True)
@@ -118,7 +109,7 @@ def save_last_session():
             }, indent=2),
             encoding="utf-8"
         )
-        print("Saved: .\\data\\persistent.json")
+        print("Saved: .\data\persistent.json")
     except Exception as e:
         print(f"Error saving session: {str(e)}")
 
@@ -155,9 +146,7 @@ def find_files_to_convert():
             if fn.lower().endswith(ext):
                 files.append(os.path.join(root, fn))
     return files
-
 # ─── ROBUST EXIT HANDLING ───────────────────────────────────────────────────────
-
 def terminate_process_tree(pid=None):
     """Kill all child processes recursively."""
     if pid is None:
@@ -193,25 +182,24 @@ def graceful_shutdown():
     Works on Windows 7/8/8.1/10/11 with multiple fallback strategies.
     """
     global _shutdown_requested, global_demo
-    
     if _shutdown_requested:
         return  # Prevent double execution
     _shutdown_requested = True
-    
-    print("\n" + "="*50)
+
+    print("\n" + "= "*50)
     print("INITIATING SHUTDOWN SEQUENCE...")
-    print("="*50)
-    
+    print("= "*50)
+
     # Step 1: Save session data
     try:
         save_last_session()
         print("✓ Session saved")
     except Exception as e:
         print(f"! Session save warning: {e}")
-    
+
     # Step 2: Signal shutdown to prevent new operations
     print("✓ Shutdown flag set")
-    
+
     # Step 3: Close Gradio interface (async-safe method)
     if global_demo is not None:
         try:
@@ -233,74 +221,83 @@ def graceful_shutdown():
                 
         except Exception as e:
             print(f"! Gradio cleanup warning: {e}")
-    
+
     # Step 4: Small delay for cleanup
     time.sleep(0.3)
-    
+
     # Step 5: Terminate child processes
     terminate_process_tree()
     print("✓ Child processes cleaned")
-    
+
     # Step 6: OS-specific exit strategy
     print("Executing exit...")
-    
+
     # Strategy A: Windows-specific force exit (most reliable on Win 7/8)
     if os.name == 'nt':
         try:
             force_exit_windows()
         except:
             pass
-    
+
     # Strategy B: Standard sys.exit (works on most modern Windows)
     try:
         sys.exit(0)
     except:
         pass
-    
+
     # Strategy C: os._exit (harsh but effective)
     try:
         os._exit(0)
     except:
         pass
-    
+
     # Strategy D: Last resort - kill self
     try:
         os.kill(os.getpid(), signal.SIGTERM)
     except:
         pass
-    
+
     # Should never reach here, but just in case
     while True:
         time.sleep(1)
 
 # Register cleanup on normal exit
 atexit.register(save_last_session)
-
-# ─── Main Conversion ────────────────────────────────────────────────────────────
-
+# ─── Main Conversion (ASYNC STREAMING) ──────────────────────────────────────────
 def start_conversion():
+    """
+    Generator function for async streaming conversion log.
+    Yields progress after each file instead of returning at the end.
+    """
     global files_process_done, files_process_total
-
+    
     if _shutdown_requested:
-        return "Error: Shutdown in progress."
+        yield "Error: Shutdown in progress."
+        return
 
     if not os.path.exists(folder_location):
-        return "Error: Invalid folder location."
+        yield "Error: Invalid folder location."
+        return
 
     files = find_files_to_convert()
     if not files:
-        return f"No .{format_from.lower()} files found in selected folder."
+        yield f"No .{format_from.lower()} files found in selected folder."
+        return
 
     files_process_done = 0
     files_process_total = len(files)
     newly_converted = []
     log = [f"Processing {files_process_total} file(s)...\n"]
 
-    for infile in files:
+    # Yield initial status
+    yield "\n".join(log)
+
+    for i, infile in enumerate(files, 1):
         if _shutdown_requested:
             log.append("\n! Shutdown requested, stopping...")
+            yield "\n".join(log)
             break
-            
+        
         outfile = os.path.splitext(infile)[0] + f".{format_to.lower()}"
         infile_abs = os.path.abspath(infile)
         outfile_abs = os.path.abspath(outfile)
@@ -328,14 +325,18 @@ def start_conversion():
             if result.returncode == 0:
                 files_process_done += 1
                 newly_converted.append(outfile_abs)
-                log.append(f"{filename_display} - {format_from.lower()} → {format_to.lower()}")
+                log.append(f"✓ {filename_display} - {format_from.lower()} → {format_to.lower()}")
             else:
                 err = result.stderr.strip() or "Unknown error"
-                log.append(f"{filename_display} - FAILED ({err})")
+                log.append(f"✗ {filename_display} - FAILED ({err})")
         except subprocess.TimeoutExpired:
-            log.append(f"{filename_display} - TIMEOUT")
+            log.append(f"⚠ {filename_display} - TIMEOUT")
         except Exception as e:
-            log.append(f"{filename_display} - ERROR: {str(e)}")
+            log.append(f"✗ {filename_display} - ERROR: {str(e)}")
+
+        # YIELD AFTER EACH FILE for real-time updates
+        progress_info = f"\n[{i}/{files_process_total}] Processing..."
+        yield "\n".join(log) + progress_info
 
     # Delete originals if requested
     if delete_files_after and not _shutdown_requested:
@@ -353,6 +354,7 @@ def start_conversion():
                     log.append(f"Failed to delete {os.path.basename(orig)}: {e}")
         if deleted_count:
             log.append(f"\nDeleted {deleted_count} original file(s)")
+            yield "\n".join(log)
 
     # Summary
     failed = files_process_total - files_process_done
@@ -376,10 +378,8 @@ def start_conversion():
                 print("\a")
         Thread(target=delayed_beep, daemon=True).start()
 
-    return "\n".join(log)
-
+    yield "\n".join(log)  # FINAL YIELD
 # ─── UI ─────────────────────────────────────────────────────────────────────────
-
 def create_interface():
     css = """
     button, .gr-button {
@@ -392,7 +392,6 @@ def create_interface():
         margin-bottom: 1rem;
     }
     """
-
     with gr.Blocks(title="NConvert-Gradio-Batch", css=css) as demo:
         gr.Markdown("# NConvert-Gradio-Batch - Image Converter")
 
@@ -441,7 +440,7 @@ def create_interface():
             convert_btn = gr.Button("Start Conversion", variant="primary", scale=4)
             exit_btn = gr.Button("Exit", variant="stop", scale=1)
 
-        # ─── Event Handlers ─────────────────────────────────────────────────────
+        # # ─── Event Handlers ─────────────────────────────────────────────────────
 
         def browse_folder():
             new_folder = filedialog.askdirectory(initialdir=folder_location)
@@ -461,7 +460,7 @@ def create_interface():
             # Return immediately to satisfy Gradio's request
             return "Shutting down... The window will close automatically."
 
-        # ─── Bindings ───────────────────────────────────────────────────────────
+        # # ─── Bindings ───────────────────────────────────────────────────────────
 
         browse_btn.click(
             browse_folder,
@@ -480,8 +479,9 @@ def create_interface():
         beep_cb.change(set_beep, inputs=beep_cb)
 
         convert_btn.click(
-            start_conversion,
-            outputs=result_box
+            fn=start_conversion,
+            outputs=result_box,
+            show_progress=True  # Shows Gradio's built-in progress indicator
         )
 
         exit_btn.click(
@@ -489,10 +489,11 @@ def create_interface():
             outputs=result_box
         )
 
+    # Enable queue for async streaming support
+    demo.queue(max_size=10, default_concurrency_limit=1)
+    
     return demo
-
 # ─── Built-in Qt Browser ───────────────────────────────────────────────────────
-
 def launch_qt_browser(url, title="NConvert-Gradio-Batch"):
     """
     Launch an embedded PyQt6 WebEngine browser window pointing at the Gradio UI.
@@ -509,13 +510,13 @@ def launch_qt_browser(url, title="NConvert-Gradio-Batch"):
         import webbrowser
         webbrowser.open(url)
         return
-
+    
     # Prevent conflicts: create QApplication only if one doesn't exist
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
 
-    class GradioBrowser(QMainWindow):
+    class GradioBrowser(QMainWindow): 
         def __init__(self, url, title):
             super().__init__()
             self.setWindowTitle(title)
@@ -566,9 +567,7 @@ def launch_qt_browser(url, title="NConvert-Gradio-Batch"):
 
     # Run the Qt event loop (blocks until window is closed)
     app.exec()
-
 # ─── Launcher ───────────────────────────────────────────────────────────────────
-
 def find_free_port(start=7860, attempts=12):
     for p in range(start, start + attempts):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -587,7 +586,6 @@ def close_old_gradio(port):
 
 def launch():
     global global_demo
-
     if sys.version_info < (3, 9):
         print("Python 3.9 or newer required")
         sys.exit(1)
@@ -610,7 +608,7 @@ def launch():
     def signal_handler(sig, frame):
         print("\nSignal received, shutting down...")
         graceful_shutdown()
-    
+
     if os.name == 'nt':
         try:
             signal.signal(signal.SIGINT, signal_handler)
@@ -626,7 +624,7 @@ def launch():
             share=False,
             inbrowser=False,
             quiet=False,
-            prevent_thread_lock=True  # Non-blocking so Qt can take over the main thread
+            prevent_thread_lock=True  # Non-blocking so Qt can take over the main thread 
         )
 
     gradio_thread = Thread(target=run_gradio, daemon=True)
