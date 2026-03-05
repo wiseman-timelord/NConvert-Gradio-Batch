@@ -1,6 +1,7 @@
 # Script: program.py - NConvert-Gradio-Batch
-# Compatible with Python 3.9–3.11 and Windows 8.1–11
-# Gradio v5.49.1 + NConvert v7.110 + PyQt6 WebEngine
+# Compatible with Python 3.10–3.12 and Windows 8.1–11
+# Windows 10+: Gradio 5.49.1 + PyQt6 WebEngine
+# Windows 8.1: Gradio 3.50.2 + PyQt5 WebEngine (Chromium 83 compatible)
 # ─── QtWebEngine GPU Workaround ────────────────────────────────────────────────
 # Must be set BEFORE any Qt imports to avoid Chromium GPU context errors
 # on systems without full GPU/OpenGL support.
@@ -13,6 +14,7 @@ print("Starting Imports...")
 import sys
 import time
 import gradio as gr
+GRADIO_MAJOR = int(gr.__version__.split('.')[0])
 from threading import Timer, Thread
 import subprocess
 import asyncio
@@ -490,31 +492,55 @@ def create_interface():
         )
 
     # Enable queue for async streaming support
-    demo.queue(max_size=10, default_concurrency_limit=1)
+    # Gradio 3.x: concurrency_count, Gradio 5.x: default_concurrency_limit
+    if GRADIO_MAJOR >= 5:
+        demo.queue(max_size=10, default_concurrency_limit=1)
+    else:
+        demo.queue(max_size=10, concurrency_count=1)
     
     return demo
 # ─── Built-in Qt Browser ───────────────────────────────────────────────────────
 def launch_qt_browser(url, title="NConvert-Gradio-Batch"):
     """
-    Launch an embedded PyQt6 WebEngine browser window pointing at the Gradio UI.
-    This replaces the default webbrowser.open() call so the interface stays
-    inside its own dedicated window rather than opening a system browser tab.
+    Launch an embedded Qt WebEngine browser window pointing at the Gradio UI.
+    
+    Windows 10+: PyQt6 WebEngine (modern Chromium) + Gradio 5.x
+    Windows 8.1: PyQt5 WebEngine (Chromium 83) + Gradio 3.x (compatible JS)
     """
+    # ── Try PyQt6 first (Windows 10+), then PyQt5 (Windows 8.1) ──
+    QT_VERSION = None
     try:
         from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
         from PyQt6.QtWebEngineWidgets import QWebEngineView
         from PyQt6.QtWebEngineCore import QWebEngineSettings
         from PyQt6.QtCore import QUrl, QTimer
+        QT_VERSION = 6
+        print("Qt browser: using PyQt6")
     except ImportError:
-        print("Warning: PyQt6-WebEngine not available. Falling back to system browser.")
-        import webbrowser
-        webbrowser.open(url)
-        return
+        try:
+            from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
+            from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings
+            from PyQt5.QtCore import QUrl, QTimer
+            QT_VERSION = 5
+            print("Qt browser: using PyQt5")
+        except ImportError:
+            print("Warning: No Qt WebEngine available. Falling back to system browser.")
+            import webbrowser
+            webbrowser.open(url)
+            return
     
     # Prevent conflicts: create QApplication only if one doesn't exist
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
+
+    # ── Compatibility helper for WebEngine settings attributes ──
+    def _setting_attr(name):
+        """Resolve a QWebEngineSettings attribute by name across Qt5/Qt6."""
+        if QT_VERSION == 6:
+            return getattr(QWebEngineSettings.WebAttribute, name)
+        else:
+            return getattr(QWebEngineSettings, name)
 
     class GradioBrowser(QMainWindow): 
         def __init__(self, url, title):
@@ -533,12 +559,12 @@ def launch_qt_browser(url, title="NConvert-Gradio-Batch"):
             self.browser = QWebEngineView()
             layout.addWidget(self.browser)
 
-            # Configure web settings
+            # Configure web settings (works on both Qt5 and Qt6)
             settings = self.browser.settings()
-            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.ScrollAnimatorEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, True)
+            settings.setAttribute(_setting_attr("JavascriptEnabled"), True)
+            settings.setAttribute(_setting_attr("LocalStorageEnabled"), True)
+            settings.setAttribute(_setting_attr("ScrollAnimatorEnabled"), True)
+            settings.setAttribute(_setting_attr("PluginsEnabled"), True)
 
             # Load the Gradio URL
             self.browser.setUrl(QUrl(url))
@@ -566,6 +592,7 @@ def launch_qt_browser(url, title="NConvert-Gradio-Batch"):
     window.show()
 
     # Run the Qt event loop (blocks until window is closed)
+    # app.exec() works on both PyQt5 5.15+ and PyQt6
     app.exec()
 # ─── Launcher ───────────────────────────────────────────────────────────────────
 def find_free_port(start=7860, attempts=12):
@@ -586,8 +613,8 @@ def close_old_gradio(port):
 
 def launch():
     global global_demo
-    if sys.version_info < (3, 9):
-        print("Python 3.9 or newer required")
+    if sys.version_info < (3, 10):
+        print("Python 3.10 or newer required")
         sys.exit(1)
 
     port = find_free_port()
@@ -600,6 +627,7 @@ def launch():
     gradio_url = f"http://localhost:{port}"
     print(f"Launching interface on {gradio_url}")
     print(f"OS Version: {WINDOWS_VERSION or 'Non-Windows'}")
+    print(f"Gradio: {gr.__version__}")
 
     demo = create_interface()
     global_demo = demo

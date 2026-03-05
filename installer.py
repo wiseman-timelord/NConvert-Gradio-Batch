@@ -22,88 +22,45 @@ NCONVERT_URLS = {  # Download URLs for NConvert
     'x32': 'https://download.xnview.com/NConvert-win.zip'
 }
 
-# All application packages with pinned versions
-INSTALL_PACKAGES = [
-    "aiofiles==24.1.0",
-    "annotated-doc==0.0.4",
-    "annotated-types==0.7.0",
-    "anyio==4.12.0",
-    "autobuild==3.10.1",
-    "backports.zstd==1.2.0",
-    "brotli==1.2.0",
-    "certifi==2025.11.12",
-    "click==8.3.1",
-    "colorama==0.4.6",
-    "fastapi==0.124.4",
-    "ffmpy==1.0.0",
-    "filelock==3.20.1",
-    "fsspec==2025.12.0",
-    "gradio==5.49.1",
-    "gradio_client==1.13.3",
-    "groovy==0.1.2",
-    "h11==0.16.0",
-    "hf-xet==1.2.0",
-    "httpcore==1.0.9",
-    "httpx==0.28.1",
-    "huggingface_hub==1.2.3",
-    "idna==3.11",
-    "Jinja2==3.1.6",
-    "llsd==1.2.4",
-    "markdown-it-py==4.0.0",
-    "MarkupSafe==3.0.3",
-    "mdurl==0.1.2",
-    "numpy==1.26.0",
-    "orjson==3.11.5",
-    "packaging==25.0",
-    "pandas==2.1.3",
-    "pillow==11.3.0",
-    "psutil==5.9.4",
-    "pydantic==2.11.10",
-    "pydantic_core==2.33.2",
-    "pydot==4.0.1",
-    "pydub==0.25.1",
-    "Pygments==2.19.2",
-    "pyparsing==3.2.5",
-    "PyQt6==6.9.0",
-    "PyQt6-Qt6==6.9.0",
-    "PyQt6_sip==13.10.0",
-    "PyQt6-WebEngine==6.9.0",
-    "PyQt6-WebEngine-Qt6==6.9.0",
-    "python-dateutil==2.9.0.post0",
-    "python-multipart==0.0.20",
-    "pytz==2025.2",
-    "PyYAML==6.0.3",
-    "pyzstd==0.19.1",
-    "rich==14.2.0",
-    "ruff==0.14.9",
-    "safehttpx==0.1.7",
-    "semantic-version==2.10.0",
-    "shellingham==1.5.4",
-    "six==1.17.0",
-    "starlette==0.50.0",
-    "tomlkit==0.13.3",
-    "tqdm==4.67.1",
-    "typer==0.20.0",
-    "typer-slim==0.20.0",
-    "typing_extensions==4.15.0",
-    "typing-inspection==0.4.2",
-    "tzdata==2025.3",
-    "uvicorn==0.38.0",
-    "websockets==15.0.1"
+# Base application packages (direct dependencies only — NOT Gradio transitive deps)
+# Gradio pulls in its own dependency tree; pinning those causes version conflicts
+# between Gradio 3.x (Win 8.1) and Gradio 5.x (Win 10+)
+INSTALL_PACKAGES_BASE = [
+    "psutil>=5.9.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0,<2",
+    "pillow>=10.0.0",
+]
+
+# Gradio version depends on OS:
+#   Win 8.1 → Gradio 3.50.2 (JS works with Qt5 WebEngine / Chromium 83)
+#   Win 10+ → Gradio 5.49.1 (needs modern Chromium, Qt6 WebEngine provides it)
+GRADIO_WIN81 = "gradio==3.50.2"
+GRADIO_WIN10 = "gradio==5.49.1"
+
+# PyQt6 packages — requires Windows 10+ (Qt 6 dropped Win 7/8/8.1 entirely)
+INSTALL_PACKAGES_PYQT6 = [
+    "PyQt6>=6.5.0",
+    "PyQt6-WebEngine>=6.5.0",
+]
+
+# PyQt5 packages — for Windows 8.1 and older (Qt 5.15 supports Win 7/8/8.1)
+INSTALL_PACKAGES_PYQT5 = [
+    "PyQt5>=5.15.0,<5.16.0",
+    "PyQtWebEngine>=5.15.0,<5.16.0",
 ]
 
 # Critical packages for verification (subset of installed packages)
-CRITICAL_PACKAGES = ['gradio', 'pandas', 'numpy', 'psutil', 'PyQt6-WebEngine']
+CRITICAL_PACKAGES_BASE = ['gradio', 'psutil']
 
 PACKAGE_IMPORT_MAP = {  # Map package names to import names for verification
     'gradio': 'gradio',
-    'pandas': 'pandas',
-    'numpy': 'numpy',
     'psutil': 'psutil',
-    'PyQt6-WebEngine': 'PyQt6.QtWebEngineWidgets'
+    'PyQt6-WebEngine': 'PyQt6.QtWebEngineWidgets',
+    'PyQtWebEngine': 'PyQt5.QtWebEngineWidgets',
 }
 
-MIN_PYTHON_VERSION = (3, 8)  # Minimum required Python version
+MIN_PYTHON_VERSION = (3, 10)  # Minimum required Python version (Gradio 5.x needs 3.10+)
 SEPARATOR_LENGTH = 79
 HEADER_CHAR = "="
 SEPARATOR_CHAR = "-"
@@ -127,6 +84,49 @@ class NConvertInstaller:
         self.nconvert_exe = self.nconvert_dir / "nconvert.exe"
         self.session_file = self.data_dir / "persistent.json"
         self.workspace_dir = self.script_dir / "temp"
+        self.venv_dir = self.script_dir / "VENV"
+        self.venv_python = self.venv_dir / "Scripts" / "python.exe"
+
+        # Detect OS and build conditional package/verification lists
+        self.win_version = self._detect_windows_version()
+        self.pyqt6_supported = self._is_pyqt6_supported()
+        self.gradio_version = GRADIO_WIN10 if self.pyqt6_supported else GRADIO_WIN81
+        self.pyqt_packages = INSTALL_PACKAGES_PYQT6 if self.pyqt6_supported else INSTALL_PACKAGES_PYQT5
+        self.critical_packages = self._build_critical_packages()
+
+    @staticmethod
+    def _detect_windows_version():
+        """Detect Windows version string for compatibility decisions."""
+        if os.name != 'nt':
+            return None
+        ver = sys.getwindowsversion()
+        if ver.major == 6:
+            if ver.minor == 1:
+                return "win7"
+            elif ver.minor == 2:
+                return "win8"
+            elif ver.minor == 3:
+                return "win81"
+        elif ver.major == 10:
+            if ver.build >= 22000:
+                return "win11"
+            return "win10"
+        return "unknown"
+
+    def _is_pyqt6_supported(self):
+        """Qt 6 (all versions) requires Windows 10 or later."""
+        if self.win_version is None:
+            return False  # Non-Windows: skip PyQt6 (Linux/Mac would need separate handling)
+        return self.win_version in ("win10", "win11")
+
+    def _build_critical_packages(self):
+        """Build the verification list: base + correct Qt WebEngine."""
+        packages = list(CRITICAL_PACKAGES_BASE)
+        if self.pyqt6_supported:
+            packages.append('PyQt6-WebEngine')
+        else:
+            packages.append('PyQtWebEngine')
+        return packages
 
     def clear_screen(self):
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -185,6 +185,49 @@ class NConvertInstaller:
         except Exception as e:
             self.print_status(f"Failed to create workspace directory: {e}", success=False)
             return False
+
+    def create_venv(self):
+        """Create a virtual environment at .\\VENV using system Python."""
+        if self.venv_python.exists():
+            self.print_status(f"Virtual environment already exists at .\\VENV\\")
+            return True
+
+        print(f"Creating virtual environment at .\\VENV\\...")
+        print(f"  Using system Python: {sys.executable}")
+        try:
+            result = subprocess.run(
+                [sys.executable, '-m', 'venv', str(self.venv_dir)],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                self.print_status("Failed to create virtual environment", success=False)
+                if result.stderr:
+                    print(result.stderr.strip())
+                return False
+
+            if not self.venv_python.exists():
+                self.print_status("venv created but python.exe not found inside", success=False)
+                return False
+
+            self.print_status(f"Virtual environment created at .\\VENV\\")
+            return True
+        except Exception as e:
+            self.print_status(f"Failed to create virtual environment: {e}", success=False)
+            return False
+
+    def purge_venv(self):
+        """Remove the entire .\\VENV\\ directory for a clean install."""
+        if self.venv_dir.exists():
+            print(f"Purging virtual environment: {self.venv_dir}")
+            try:
+                shutil.rmtree(self.venv_dir)
+                self.print_status("Virtual environment removed")
+            except Exception as e:
+                self.print_status(f"Failed to remove virtual environment: {e}", success=False)
+                return False
+        else:
+            print("Virtual environment does not exist, nothing to purge.")
+        return True
 
     def download_file(self, url, destination):
         retry_count = 0
@@ -336,44 +379,86 @@ class NConvertInstaller:
             return False
 
     def install_python_packages(self):
-        print("\nUpgrading build tools (pip, setuptools) to latest...")
-        build_tools = ["pip", "setuptools"]
-        for tool in build_tools:
-            print(f"→ Upgrading {tool} to latest version...")
-            result = subprocess.run(
-                [sys.executable, '-m', 'pip', 'install', '--upgrade', tool],
-                capture_output=True, text=True
-            )
-            if result.returncode == 0:
-                self.print_status(f"{tool} upgraded successfully")
-            else:
-                self.print_status(f"Failed to upgrade {tool}", success=False)
-                if result.stderr:
-                    print(result.stderr.strip())
-                return False
+        """Install all packages into the .\\VENV\\ virtual environment.
+        
+        Installs in 3 stages to avoid dependency conflicts:
+          1. Base direct dependencies (psutil, pandas, numpy, pillow)
+          2. Gradio (OS-specific version — pip resolves its own dep tree)
+          3. PyQt + WebEngine (OS-specific — Qt5 for Win 8.1, Qt6 for Win 10+)
+        """
+        venv_py = str(self.venv_python)
+        gradio_label = self.gradio_version.split("==")[1]
+        qt_label = "PyQt5/Qt5" if not self.pyqt6_supported else "PyQt6/Qt6"
 
-        print("\nInstalling pinned application packages...")
-        print("(This includes PyQt6-WebEngine for the built-in browser)")
-        # Create temporary requirements file for pinned dependencies
+        print(f"\nDetected: {self.win_version}")
+        print(f"  Gradio {gradio_label}, {qt_label} WebEngine")
+        print(f"  Target: {venv_py}")
+
+        # ── Stage 0: Upgrade pip ──
+        print("\nUpgrading pip inside virtual environment...")
+        result = subprocess.run(
+            [venv_py, '-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools'],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            self.print_status("pip and setuptools upgraded in VENV")
+        else:
+            self.print_status("Failed to upgrade pip/setuptools in VENV", success=False)
+            if result.stderr:
+                print(result.stderr.strip())
+            return False
+
+        # ── Stage 1: Base direct dependencies ──
+        print("\nInstalling base application packages...")
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as req_file:
-            req_file.write("\n".join(INSTALL_PACKAGES))
+            req_file.write("\n".join(INSTALL_PACKAGES_BASE))
             req_file_path = Path(req_file.name)
-
         try:
             result = subprocess.run(
-                [sys.executable, '-m', 'pip', 'install', '-r', str(req_file_path)],
+                [venv_py, '-m', 'pip', 'install', '-r', str(req_file_path)],
                 capture_output=True, text=True
             )
             if result.returncode == 0:
-                self.print_status("All application packages installed successfully")
-                return True
+                self.print_status("Base packages installed")
             else:
-                self.print_status("Failed to install application packages", success=False)
+                self.print_status("Failed to install base packages", success=False)
                 if result.stderr:
                     print(result.stderr.strip())
                 return False
         finally:
             req_file_path.unlink(missing_ok=True)
+
+        # ── Stage 2: Gradio (OS-specific version) ──
+        print(f"\nInstalling Gradio {gradio_label}...")
+        result = subprocess.run(
+            [venv_py, '-m', 'pip', 'install', self.gradio_version],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            self.print_status(f"Gradio {gradio_label} installed")
+        else:
+            self.print_status(f"Failed to install Gradio {gradio_label}", success=False)
+            if result.stderr:
+                print(result.stderr.strip())
+            return False
+
+        # ── Stage 3: PyQt + WebEngine (OS-specific) ──
+        print(f"\nInstalling {qt_label} WebEngine (built-in browser)...")
+        for pkg in self.pyqt_packages:
+            result = subprocess.run(
+                [venv_py, '-m', 'pip', 'install', pkg],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                self.print_status(f"{pkg.split('>=')[0]} installed")
+            else:
+                self.print_status(f"Failed to install {pkg}", success=False)
+                if result.stderr:
+                    print(result.stderr.strip())
+                return False
+
+        self.print_status("All application packages installed successfully")
+        return True
 
     def create_default_session_file(self):
         try:
@@ -398,17 +483,25 @@ class NConvertInstaller:
             self.print_status("nconvert.exe missing", success=False)
             all_good = False
 
-        for package_name in CRITICAL_PACKAGES:
+        if not self.venv_python.exists():
+            self.print_status("VENV python.exe not found — venv may be corrupted", success=False)
+            return False
+
+        venv_py = str(self.venv_python)
+        for package_name in self.critical_packages:
             import_name = PACKAGE_IMPORT_MAP.get(package_name, package_name.replace('-', '_'))
             try:
                 subprocess.run(
-                    [sys.executable, '-c', f'import {import_name}; print("{import_name} OK")'],
+                    [venv_py, '-c', f'import {import_name}; print("{import_name} OK")'],
                     capture_output=True, text=True, timeout=8, check=True
                 )
                 self.print_status(f"{package_name} available")
             except Exception as e:
                 self.print_status(f"{package_name} verification failed: {str(e)}", success=False)
                 all_good = False
+
+        if not self.pyqt6_supported:
+            print(f"  (Using PyQt5/Qt 5.15 for {self.win_version or 'this OS'} compatibility)")
 
         if all_good:
             self.print_status("All critical components verified successfully")
@@ -445,22 +538,9 @@ class NConvertInstaller:
         return True
 
     def uninstall_python_packages(self):
-        """Uninstall all application packages for a clean slate."""
-        print("\nUninstalling existing application packages...")
-        # Extract package names without version pins
-        package_names = [pkg.split("==")[0] for pkg in INSTALL_PACKAGES]
-
-        # Uninstall in one batch
-        result = subprocess.run(
-            [sys.executable, '-m', 'pip', 'uninstall', '-y'] + package_names,
-            capture_output=True, text=True
-        )
-        if result.returncode == 0:
-            self.print_status("Application packages uninstalled")
-        else:
-            # Some packages may not have been installed; that's OK
-            self.print_status("Package uninstall completed (some may not have been present)")
-        return True
+        """Remove the virtual environment for a clean slate (replaces per-package uninstall)."""
+        print("\nRemoving virtual environment for clean reinstall...")
+        return self.purge_venv()
 
     # ─── Installation Flows ─────────────────────────────────────────────────────
 
@@ -476,6 +556,9 @@ class NConvertInstaller:
             return False
 
         if not self.install_nconvert():
+            return False
+
+        if not self.create_venv():
             return False
 
         if not self.install_python_packages():
@@ -497,7 +580,7 @@ class NConvertInstaller:
         return success
 
     def run_clean_install(self):
-        """Clean Install: purge everything in .\\data\\ and .\\temp\\, then reinstall."""
+        """Clean Install: purge everything in .\\data\\, .\\temp\\, and .\\VENV\\, then reinstall."""
         self.clear_screen()
         self.print_header("NConvert-Gradio-Batch — Clean Install")
 
@@ -519,6 +602,9 @@ class NConvertInstaller:
             return False
 
         if not self.install_nconvert():
+            return False
+
+        if not self.create_venv():
             return False
 
         if not self.install_python_packages():
@@ -557,7 +643,7 @@ class NConvertInstaller:
         print("        Install or update all components in-place.")
         print()
         print("     2. Clean Install")
-        print("        Purge .\\data\\ and .\\temp\\, uninstall packages, then reinstall.")
+        print("        Purge .\\data\\, .\\temp\\, and .\\VENV\\, then reinstall fresh.")
         print()
         print()
         print()

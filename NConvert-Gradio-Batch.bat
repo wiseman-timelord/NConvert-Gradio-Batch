@@ -78,7 +78,7 @@ echo Checking Python availability...
 python --version >nul 2>&1
 if errorlevel 1 (
     echo Error: Python not found on PATH.
-    echo Please ensure Python 3.8-3.12 is installed and added to your system PATH.
+    echo Please ensure Python 3.10-3.12 is installed and added to your system PATH.
     echo You can download Python from: https://www.python.org/downloads/
     timeout /t 3 >nul
     goto :end_of_file
@@ -139,10 +139,23 @@ if "!choice!"=="1" (
 cls
 call :printHeader "Run NConvert-Gradio-Batch"
 echo.
+
+:: Check VENV exists before trying to activate
+if not exist ".\VENV\Scripts\activate.bat" (
+    echo Error: Virtual environment not found at .\VENV\
+    echo Please run the installer first ^(option 2^).
+    echo.
+    pause
+    goto :main_menu
+)
+
+:: Activate the virtual environment
+echo Activating virtual environment...
+call .\VENV\Scripts\activate.bat
 echo Launching NConvert Gradio Batch...
 echo.
 
-:: Run the Python script using python from PATH
+:: Run the Python script (now using VENV python)
 python .\program.py
 
 :: Check if program exited with error
@@ -151,6 +164,9 @@ if errorlevel 1 (
     echo Error: Program failed to run properly.
     echo Please run the installer option again from the main menu.
 )
+
+:: Deactivate the virtual environment
+call deactivate
 
 REM pause
 goto :main_menu
@@ -161,7 +177,7 @@ cls
 call :printHeader "Run Installation"
 echo.
 echo Launching Python installer...
-echo Using Python from system PATH
+echo Using system Python ^(installer creates VENV internally^)
 echo.
 
 :: Check if installer.py exists
@@ -173,11 +189,15 @@ if not exist ".\installer.py" (
     goto :main_menu
 )
 
-:: Run the Python installer
+:: Run the Python installer with SYSTEM python (not venv)
+:: The installer itself creates .\VENV and installs packages into it
 echo Running installer.py...
 echo.
 python .\installer.py
 echo.
+
+:: Deactivate venv if it was somehow left active
+call deactivate 2>nul
 
 :: Check installer exit code
 if errorlevel 1 (
