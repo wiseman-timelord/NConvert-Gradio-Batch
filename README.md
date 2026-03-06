@@ -5,7 +5,7 @@ Status: Working - Experimental currently, recetly re-implemented VENV and built-
 Its a Python QTWeb Gradio interface for converting ANY image format to ANY imgage format, even rare ones like .pspimage, all made possible through NConvert binary command line tool. The program provides a user-friendly menu to set the source folder, input file format, and desired output format. The scripts ensures efficient and seamless conversion and management of image files, making it a practical tool for users needing to process multiple common format such as `.jpg`, `.bmp`, `.png`, etc, and also less common formats such as`.pspimage`, and vice versa, and another thing, it does this recursively through subfolders, so you can just aim it at windows pictures folder, and everything will be where it was, just in the new format too.
 
 ### Features:
-- **Multiple Formats**: The Gradio interface limited to 10, but they can be edited in the `.py` script. 
+- **Multiple Formats**: The Gradio interface limited to 10 image formats, but which ones can be edited in the `.py` script. 
 - **Interactive Menu**: Utilizing your standard text-based menu for effective configuration.
 - **Batch Conversion**: All specified format files in, specified folder and its subfolders, to desired format.
 - **Automatic Report**: Provides a summary of the total number of successfully converted files.
@@ -104,10 +104,11 @@ Its a Python QTWeb Gradio interface for converting ANY image format to ANY imgag
 </details>
 
 ## Requirements:
-- Windows 10-11 - The Batch uses a 80x30 text display, the new QTWeb code needs to be assessed for case operation/install, so for now its 10-11, however v1.2 versions have cases of operation/install for 7-11 compatibility. Likely I will drop Windows 7-8.1 going forwards.
+Needs re-assessment, however..
+- Windows 8.1-10 - For now I am programming towards compatibility with Windows 8.1-11, however version <=1.2 supposedly has cases of operation/install for 7-11 compatibility.
 - [NConvert](https://www.xnview.com/en/nconvert) - ~500 image formats supported (installed by installer).
-- Python 3.9+ - Tested on 3.11/3.12, but ensure python.exe is on system PATH.
-- Powershell ? - Needs to be assessed, but its for the text buffer. 
+- Python 3.10+ - Tested on 3.10/3.12, but ensure python.exe is on system PATH.
+- Powershell 5.1+ - Needs to be assessed, but its for the text buffer. 
 - Internet - Installer requires internet for install of Python libraries etc.
 
 ### Instructions:
