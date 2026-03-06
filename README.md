@@ -1,5 +1,5 @@
 # NConvert-Gradio-Batch
-Status: Working - QTWeb, no longer uses external browser for GUI.
+Status: Working - Experimental currently, recetly re-implemented VENV and built-in browsers, otherwise if you want system browser and system python, then try previous updates since v1.00-Current. v0.xx versions are text interface.
 
 ### Description:
 Its a Python QTWeb Gradio interface for converting ANY image format to ANY imgage format, even rare ones like .pspimage, all made possible through NConvert binary command line tool. The program provides a user-friendly menu to set the source folder, input file format, and desired output format. The scripts ensures efficient and seamless conversion and management of image files, making it a practical tool for users needing to process multiple common format such as `.jpg`, `.bmp`, `.png`, etc, and also less common formats such as`.pspimage`, and vice versa, and another thing, it does this recursively through subfolders, so you can just aim it at windows pictures folder, and everything will be where it was, just in the new format too.
