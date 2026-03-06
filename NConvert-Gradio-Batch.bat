@@ -194,13 +194,16 @@ if not exist ".\installer.py" (
 echo Running installer.py...
 echo.
 python .\installer.py
+
+:: Capture installer exit code BEFORE anything else can overwrite ERRORLEVEL
+set "INSTALLER_EXIT=%ERRORLEVEL%"
 echo.
 
 :: Deactivate venv if it was somehow left active
 call deactivate 2>nul
 
-:: Check installer exit code
-if errorlevel 1 (
+:: Check installer exit code (using saved value)
+if !INSTALLER_EXIT! GEQ 1 (
     echo Installation encountered errors.
     echo Please review the output above.
 ) else (

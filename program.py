@@ -2,16 +2,31 @@
 # Compatible with Python 3.10–3.12 and Windows 8.1–11
 # Windows 10+: Gradio 5.49.1 + PyQt6 WebEngine
 # Windows 8.1: Gradio 3.50.2 + PyQt5 WebEngine (Chromium 83 compatible)
-# ─── QtWebEngine GPU Workaround ────────────────────────────────────────────────
-# Must be set BEFORE any Qt imports to avoid Chromium GPU context errors
-# on systems without full GPU/OpenGL support.
-
-# Imports
+# ─── Early Init: Read constants.ini & set Qt env BEFORE any Qt imports ─────────
 import os
-os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
-os.environ["QT_OPENGL"] = "software"
-print("Starting Imports...")
 import sys
+import configparser
+
+# Read system constants written by the installer
+_ini_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "constants.ini")
+_config = configparser.ConfigParser()
+_config.read(_ini_path, encoding="utf-8")
+
+WINDOWS_VERSION = _config.get("system", "os_version", fallback="unknown")
+PYTHON_VERSION = _config.get("system", "python_version", fallback="unknown")
+WORKING_DIRECTORY = _config.get("system", "working_directory",
+                                fallback=os.path.dirname(os.path.abspath(__file__)))
+
+# ─── QtWebEngine GPU Workaround ────────────────────────────────────────────────
+# Only disable GPU on older Windows where GPU/OpenGL support is limited.
+# On Windows 10+ the GPU pipeline works; forcing software mode actually causes
+# GLES3 context creation errors in the Chromium subprocess.
+if WINDOWS_VERSION in ("win81", "win8", "win7"):
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+    os.environ["QT_OPENGL"] = "software"
+
+# ─── Remaining Imports ─────────────────────────────────────────────────────────
+print("Starting Imports...")
 import time
 import gradio as gr
 GRADIO_MAJOR = int(gr.__version__.split('.')[0])
@@ -33,31 +48,13 @@ print("Initializing Program...")
 # ─── Global References ──────────────────────────────────────────────────────────
 global_demo = None
 _shutdown_requested = False
-# ─── OS Detection & Compatibility ───────────────────────────────────────────────
-def get_windows_version():
-    """Detect Windows version for compatibility handling."""
-    if os.name != 'nt':
-        return None
-    version = sys.getwindowsversion()
-    major = version.major
-    if major == 6:
-        if version.minor == 1:
-            return "win7"
-        elif version.minor == 2:
-            return "win8"
-        elif version.minor == 3:
-            return "win81"
-    elif major == 10:
-        if version.build >= 22000:
-            return "win11"
-        return "win10"
-    return "unknown"
-
-WINDOWS_VERSION = get_windows_version()
-print(f"Detected OS: {WINDOWS_VERSION or 'Non-Windows'}")
+# ─── OS / Path info from constants.ini ──────────────────────────────────────────
+print(f"Detected OS: {WINDOWS_VERSION}")
+print(f"Python: {PYTHON_VERSION}")
+print(f"Working Dir: {WORKING_DIRECTORY}")
 # ─── Paths & Globals ────────────────────────────────────────────────────────────
-workspace_path = os.path.abspath(os.path.join(".", "temp"))
-DATA_DIR = Path(__file__).parent / "data"
+workspace_path = os.path.join(WORKING_DIRECTORY, "temp")
+DATA_DIR = Path(WORKING_DIRECTORY) / "data"
 SETTINGS_FILE = DATA_DIR / "persistent.json"
 nconvert_path = str(DATA_DIR / "NConvert" / "nconvert.exe")
 allowed_formats = ["JPEG", "PNG", "BMP", "GIF", "TIFF", "AVIF", "WEBP", "SVG", "PSD", "PSPIMAGE"]
@@ -83,7 +80,7 @@ if SETTINGS_FILE.exists():
             _session["last_to"] = data.get("last_to", _session["last_to"])
             _session["last_delete"] = data.get("last_delete", _session["last_delete"])
             _session["beep_on_complete"] = data.get("beep_on_complete", _session["beep_on_complete"])
-            print("Loaded: .\data\persistent.json")
+            print(r"Loaded: .\data\persistent.json")
     except Exception:
         pass
 
@@ -111,7 +108,7 @@ def save_last_session():
             }, indent=2),
             encoding="utf-8"
         )
-        print("Saved: .\data\persistent.json")
+        print(r"Saved: .\data\persistent.json")
     except Exception as e:
         print(f"Error saving session: {str(e)}")
 
@@ -626,7 +623,7 @@ def launch():
 
     gradio_url = f"http://localhost:{port}"
     print(f"Launching interface on {gradio_url}")
-    print(f"OS Version: {WINDOWS_VERSION or 'Non-Windows'}")
+    print(f"OS Version: {WINDOWS_VERSION}")
     print(f"Gradio: {gr.__version__}")
 
     demo = create_interface()

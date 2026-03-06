@@ -15,6 +15,7 @@ from pathlib import Path
 import tempfile
 import time
 import json
+import configparser
 
 # Global Constants
 NCONVERT_URLS = {  # Download URLs for NConvert
@@ -83,6 +84,7 @@ class NConvertInstaller:
         self.nconvert_dir = self.data_dir / "NConvert"
         self.nconvert_exe = self.nconvert_dir / "nconvert.exe"
         self.session_file = self.data_dir / "persistent.json"
+        self.constants_file = self.data_dir / "constants.ini"
         self.workspace_dir = self.script_dir / "temp"
         self.venv_dir = self.script_dir / "VENV"
         self.venv_python = self.venv_dir / "Scripts" / "python.exe"
@@ -473,6 +475,31 @@ class NConvertInstaller:
             self.print_status(f"Could not create persistent config: {e}", success=False)
             return False
 
+    def create_constants_ini(self):
+        """Write detected system constants to data/constants.ini.
+
+        Values stored:
+          [system]
+          os_version      – win81 | win10 | win11 | ...
+          python_version  – e.g. 3.12
+          working_directory – absolute path to the script/batch directory
+        """
+        try:
+            self.data_dir.mkdir(exist_ok=True)
+            cfg = configparser.ConfigParser()
+            cfg["system"] = {
+                "os_version": self.win_version or "unknown",
+                "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
+                "working_directory": str(self.script_dir),
+            }
+            with open(self.constants_file, "w", encoding="utf-8") as f:
+                cfg.write(f)
+            self.print_status(f"System constants written: data/constants.ini")
+            return True
+        except Exception as e:
+            self.print_status(f"Could not create constants.ini: {e}", success=False)
+            return False
+
     def verify_installation(self):
         print("\nVerifying critical components...")
         all_good = True
@@ -567,6 +594,9 @@ class NConvertInstaller:
         if not self.create_default_session_file():
             return False
 
+        if not self.create_constants_ini():
+            return False
+
         success = self.verify_installation()
 
         print("\n" + "=" * SEPARATOR_LENGTH)
@@ -611,6 +641,9 @@ class NConvertInstaller:
             return False
 
         if not self.create_default_session_file():
+            return False
+
+        if not self.create_constants_ini():
             return False
 
         success = self.verify_installation()
