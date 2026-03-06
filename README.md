@@ -135,6 +135,7 @@ Here are my current instructions...
 ### Development:
 - Merge, "NConvert-Batch" and "NConvert-Bash", into "NConvert-GUI", with Dual-mode scripts. Includine introduction of ".\scripts\configure.py" for, globals and load/save config. Requiring the deletion of project "NConvert-Bash". This will not be able to be done until I have a Ubuntu setup again.
 - Rename "program.py" to "launcher.py", then add `.\scripts\utilities.py`, and move all non core functions (list) out of launcher.py into utilities.
+- Need additional option in batch menu, to launch without debug (command prompt) being open in background.
 
 ## DISCLAIMER:
 This software is subject to the terms in License.Txt, covering usage, distribution, and modifications. For full details on your rights and obligations, refer to License.Txt.
