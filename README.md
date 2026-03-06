@@ -131,11 +131,10 @@ Here are my current instructions...
 - Thanks to, DeepSeek v2.5-v3 and GPT-4o and Claudev4 and Grok and Qwen3-Max, for assistance in programming. 
 - Thanks to [XnView Software](https://www.xnview.com/en/) for, creating and hosting, [NConvert](https://www.xnview.com/en/nconvert/), the binary behind my frontend.
 - NConvert-Batch is the Windows version of [NConvert-Bash](https://github.com/wiseman-timelord/NConvert-Bash).
-- A slideshow window for after conversion was attempted in, Qwen3-Max and Grok, but both failed, 50/50 on the idea anyhow.
 
 ### Development:
 - Merge, "NConvert-Batch" and "NConvert-Bash", into "NConvert-GUI", with Dual-mode scripts. Includine introduction of ".\scripts\configure.py" for, globals and load/save config. Requiring the deletion of project "NConvert-Bash". This will not be able to be done until I have a Ubuntu setup again.
-- Rename "program.py" to "launcher.py", in order for the python scripts to sit next to each other neatly in the folder.
+- Rename "program.py" to "launcher.py", then add `.\scripts\utilities.py`, and move all non core functions (list) out of launcher.py into utilities.
 
 ## DISCLAIMER:
 This software is subject to the terms in License.Txt, covering usage, distribution, and modifications. For full details on your rights and obligations, refer to License.Txt.
